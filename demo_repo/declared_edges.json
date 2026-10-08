@@ -1,0 +1,7 @@
+{
+  "declared_edges": [
+    ["api_gateway", "order_service"],
+    ["order_service", "inventory_service"],
+    ["inventory_service", "database"]
+  ]
+}
