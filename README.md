@@ -45,9 +45,13 @@ Compare the graphs and report differences in:
 •	out-of-sync components
 •	stale components
 •	changed connections
+
 Report drift with confidence and evidence, such as:
-"Diagram shows Auth → SQLite but routes via Redis at line v2/auth.py:42.*
+
+**"Diagram shows Auth → SQLite but routes via Redis at line v2/auth.py:42."**
+
 Compare graphs and generate a new Mermaid diagram to replace the out-of-date diagram in the same pull request
+
 Advantages:
 •	Graph extraction is purely structural
 •	Drift analysis is deterministic, and all reports are explainable
