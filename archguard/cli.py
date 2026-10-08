@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 # Ensure UTF-8 output on Windows (avoids cp1252 crash with emoji)
+# Keep status output reliable on Windows consoles using a legacy code page.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
