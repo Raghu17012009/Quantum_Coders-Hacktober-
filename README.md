@@ -80,7 +80,6 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
 
 ### Architecture
 
-## Architecture
 
 ```mermaid
 flowchart TD
