@@ -1,4 +1,4 @@
-# ArchDrift
+<img width="906" height="542" alt="image" src="https://github.com/user-attachments/assets/795a9a07-e0a9-44d8-ac78-2af2214d89d9" /># ArchDrift
 
 > ArchDrift is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
 
@@ -77,15 +77,14 @@ Advantages:
 
 ### Technology Stack
 
-
 | Category        | Technologies                |
 | --------------- | --------------------------- |
-| Frontend        | [Technologies / N/A]        |
-| Backend         | [Technologies / N/A]        |
-| Database        | [Technologies / N/A]        |
-| AI / ML         | [Models / frameworks / N/A] |
-| Infrastructure  | [Technologies / N/A]        |
-| APIs / Services | [Services / N/A]            |
+| Frontend        | N/A for the core tool (CLI and CI output). Optional: a static HTML drift report      |
+| Backend         | Python 3.11+, Typer (CLI), Pydantic (graph and finding schemas), NetworkX (graph diff), Python ast and tree-sitter (code analysis), PyYAML (Docker Compose and Kubernetes parsing)       |
+| Database        | N/A. Graphs and reports are stored as JSON files       |
+| AI / ML         | Gemma 4 (open-weight, multimodal) reads PNG/SVG diagrams and extracts nodes and edges as schema-constrained JSON. Served locally through Ollama, so the whole pipeline stays open-source |
+| Infrastructure  | GitHub Actions (CI drift check on pull requests), Docker (packaged CLI), pre-commit hook, pytest      |
+| APIs / Services | GitHub API (posts drift findings as PR comments), Mermaid CLI (mermaid-cli) to render and validate generated diagrams, agent skill interface           |
 
 
 If a category or technology is not implemented in the project, specify `N/A` instead of leaving the field blank.
