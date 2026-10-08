@@ -81,20 +81,26 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
 ### Architecture
 
 '''mermaid
-    A[architecture.png] --> B{--edges given?}
-    B -- "yes (timed demo)" --> C[Load declared_edges.json]
-    B -- "no (live beat)" --> D[Gemma 4 reads PNG + folder list]
-    D --> E[Strip fences, normalize names, keep only known folders]
-    E --> F[Declared edges]
+    flowchart TD
+    A["architecture.png"] --> B{"--edges given?"}
+    B -->|"yes: timed demo"| C["Load declared_edges.json"]
+    B -->|"no: live beat"| D["Gemma 4 reads PNG + folder list"]
+    D --> E["Strip fences, normalize names, keep known folders"]
+    E --> F["Declared edges"]
     C --> F
-    G[demo_repo] --> H[Discover modules: folders with __init__.py]
-    H --> I[ast scan: absolute imports between modules]
-    I --> J[Actual edges with file + line]
-    F --> K[Diff: actual minus declared]
+    G["demo_repo"] --> H["Discover modules: folders with __init__.py"]
+    H --> I["ast scan: absolute imports between modules"]
+    I --> J["Actual edges with file + line"]
+    F --> K["Diff: actual minus declared"]
     J --> K
-    K --> L{Any undeclared edges?}
-    L -- yes --> M[Print source -> target in file:line<br/>write drift_report.md + html<br/>exit 1]
-    L -- no --> N[Print: 0 undeclared edges<br/>write green report<br/>exit 0]
+    K --> L{"Undeclared edges?"}
+    L -->|"yes"| M["Print source -> target in file:line<br/>Write drift_report.md + html<br/>Exit 1"]
+    L -->|"no"| N["0 undeclared edges<br/>Green report<br/>Exit 0"]
+
+    style D fill:#e8dcff,stroke:#7c5cd6,stroke-width:2px
+    style M fill:#ffd6d6,stroke:#d33333,stroke-width:2px
+    style N fill:#d8f0e0,stroke:#2e8b57,stroke-width:2px
+
 '''
 
 ### Technology Stack
