@@ -2,6 +2,10 @@ import argparse
 import sys
 from pathlib import Path
 
+# Keep status output reliable on Windows consoles using a legacy code page.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from .ast_scanner import discover_modules, scan_module_imports
 from .diff_engine import find_drift, find_stale
 from .visualizer import generate_drift_assets

@@ -76,10 +76,36 @@ def generate_drift_assets(
     stale_edges = stale_edges or []
     mermaid_code = build_mermaid(declared_edges, drift_records, stale_edges)
 
-    # Markdown report with a Mermaid fence (renders in VS Code / GitHub).
-    Path(output_mermaid).write_text(f"```mermaid\n{mermaid_code}\n```\n", encoding="utf-8")
-
     n_drift, n_stale = len(drift_records), len(stale_edges)
+    md = ["# ArchGuard Drift Report\n\n"]
+    if n_drift:
+        noun = "import" if n_drift == 1 else "imports"
+        md.append(f"## FAIL — {n_drift} undeclared {noun}\n\n")
+        md.append("The code contains a dependency that is not declared in the architecture.\n\n")
+        md.append("### Detected Drift\n\n")
+        md.append("| Source | Target | File | Line |\n|---|---|---|---:|\n")
+        for item in drift_records:
+            md.append(
+                f"| `{item['source']}` | `{item['target']}` | "
+                f"`{item['file']}` | {item['line']} |\n"
+            )
+        md.append("\n### Architecture\n\n")
+        md.append("Solid arrows = declared architecture.<br>\n")
+        md.append("Red dashed arrows = undeclared code dependencies.\n\n")
+        md.append("Review each dependency and either correct the code or update the architecture contract if intentional.\n\n")
+    elif n_stale:
+        md.append(f"## FAIL — {n_stale} stale diagram edge(s)\n\n")
+        md.append("The architecture declares an edge that is not used by the code.\n\n")
+    else:
+        md.append("## PASS — 0 undeclared imports\n\n")
+        md.append("The code matches the documented architecture.\n\n")
+        md.append("## Architecture\n\n")
+        md.append("Green solid arrows = declared architecture.\n\n")
+    md.append("```mermaid\n")
+    md.append(mermaid_code)
+    md.append("\n```\n")
+    Path(output_mermaid).write_text("".join(md), encoding="utf-8")
+
     if n_drift or n_stale:
         parts = []
         if n_drift:
