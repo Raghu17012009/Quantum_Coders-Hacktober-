@@ -100,7 +100,7 @@ def generate_drift_assets(
                 f"| {item['line']} |\n"
             )
         md.append("\n### Architecture\n\n")
-        md.append("Solid arrows = declared architecture.  \n")
+        md.append("Solid arrows = declared architecture.<br>\n")
         md.append("Red dashed arrows = undeclared code dependencies.\n\n")
         md.append("### Source Location\n\n")
         for item in drift_records:
