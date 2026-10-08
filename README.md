@@ -74,13 +74,14 @@ Python source files
       ▼  Python AST scanner (stdlib ast only)
 actual imports  (file + line)
 
-actual imports − declared edges
+actual imports − declared edges   → undeclared edges (drift)
+declared edges − actual imports   → stale edges (drawn, but no import)
       │
       ▼
-drift
-      ├── terminal: file + line, exit 1 (drift) or exit 0 (clean)
+report
+      ├── terminal: file + line, exit 1 (drift or stale) or exit 0 (clean)
       ├── drift_report.md   — Mermaid diagram, works offline in VS Code
-      └── drift_report.html — red/green HTML summary
+      └── drift_report.html — red/amber/green HTML summary
 ```
 
 ### Gemma 4's Role
@@ -99,6 +100,12 @@ ArchGuard reports an edge as drift when:
 
 > It exists in the scanned code **AND** is absent from the declared architecture graph.
 
+ArchGuard also reports a **stale edge** when:
+
+> It is drawn in the declared architecture graph **AND** no import in the scanned code uses it.
+
+Stale edges fail the check by default (exit 1); pass `--allow-stale` to report them as
+warnings only. They are drawn as amber dotted arrows and listed in both reports.
 Nothing else triggers a report. There is no speculation, no heuristic severity, and
 no automatic fix.
 
@@ -286,6 +293,14 @@ Gemma 4 reads `architecture.png`, identifies the directed edges, and returns the
 structured JSON. The printed edges show the vision step in real time. The scanner and
 diff then run identically.
 
+### Running the tests
+
+```bash
+python -m pip install pytest
+python -m pytest              # tests/ — scanner, diff, stale edges, CLI, reports
+python -m unittest test_archguard   # original integration tests, stdlib only
+```
+
 ---
 
 ## Project Architecture
@@ -301,9 +316,9 @@ flowchart TD
     G["demo_repo"] --> H["Discover modules: folders with __init__.py"]
     H --> I["ast scan: absolute imports between modules"]
     I --> J["Actual edges with file + line"]
-    F --> K["Diff: actual minus declared"]
+    F --> K["Diff: actual minus declared (drift)<br/>declared minus actual (stale)"]
     J --> K
-    K --> L{"Undeclared edges?"}
+    K --> L{"Undeclared or stale edges?"}
     L -->|"yes"| M["Print source -> target in file:line<br/>Write drift_report.md + html<br/>Exit 1"]
     L -->|"no"| N["0 undeclared edges<br/>Green report<br/>Exit 0"]
 
@@ -316,14 +331,19 @@ flowchart TD
 
 ## Limitations
 
-- The scanner currently supports **Python only** (stdlib `ast`).
+- The scanner currently supports **Python only** (stdlib `ast`). It finds `import x`,
+  `from x import y`, `import x.y as z`, relative imports that climb out of a package
+  (`from ..x import y`), and `importlib.import_module("x")` / `__import__("x")` with a
+  literal name.
+- Only top-level folders containing `__init__.py` are treated as modules (no `src/`
+  layout or namespace-package discovery yet).
 - It checks **top-level package import relationships** — it does not reconstruct the
   full runtime call graph.
 - PNG visual extraction depends on **Gemma 4 multimodal interpretation** — label the
   diagram with exact folder names (not nicknames) for reliable extraction.
 - The architecture diagram is treated as the **documented contract**. A missing arrow
   is reported as drift; it is not automatically classified as a forbidden boundary
-  unless the diagram says so.
+  unless the diagram says so. An arrow that no import uses is reported as stale.
 - ArchGuard **does not patch code** and does not suggest adapters or refactorings.
 
 ---
@@ -352,8 +372,10 @@ flowchart TD
 │   ├── cli.py              # CLI entry point
 │   ├── dag_extractor.py    # Gemma 4 visual extraction
 │   ├── ast_scanner.py      # Deterministic AST import scanner
-│   ├── diff_engine.py      # Set difference: actual − declared
+│   ├── diff_engine.py      # Set differences: undeclared (actual − declared) and stale (declared − actual)
 │   └── visualizer.py       # drift_report.md + drift_report.html
+├── tests/                  # pytest suite (scanner, diff, CLI, reports)
+├── test_archguard.py       # unittest integration tests
 ├── skills/
 │   └── archguard/
 │       └── SKILL.md        # Agent Skill Open Standard
