@@ -1,74 +1,32 @@
 ---
 name: archguard
-description: >
-  Audits a Python repository for architectural drift against a visual architecture
-  diagram. Use when checking design boundaries or linting module imports against
-  architecture.png. Reports undeclared edges (imports that exist in code but are
-  absent from the architecture diagram). Exits 1 on drift, 0 on conformance.
+description: Audits a repo for architectural drift against a visual architecture diagram. Use when checking design boundaries or linting module imports against architecture.png.
 ---
 
-# ArchGuard Skill
+# ArchGuard
 
-## When to use this skill
+ArchGuard treats the architecture diagram as the contract. It compares the arrows in the diagram with the real imports between top-level packages and reports any import the diagram does not draw.
 
-Use ArchGuard when you want to verify that the Python package imports in a
-repository match the architecture documented by the repository's diagram
-(`architecture.png`).
+## When to use
 
-Trigger on requests like:
-- "Check if the code matches the architecture diagram"
-- "Find architecture drift"
-- "Lint the module imports against the design"
-- "Does the code respect the documented boundaries?"
+Use this skill when the user asks to verify, audit, or lint the architecture or module boundaries against `architecture.png`.
 
-## How to run ArchGuard
+## Steps
 
-### Offline / timed demo (no API key required)
+1. Find the diagram: `demo_repo/architecture.png` (otherwise look in the repo root or `docs/`).
+2. Run this command from the repository root. Do not reimplement the scan yourself:
 
 ```bash
-python -m archguard.cli check \
-  --diagram demo_repo/architecture.png \
-  --repo ./demo_repo \
-  --edges demo_repo/declared_edges.json
+python -m archguard.cli check --diagram demo_repo/architecture.png --repo ./demo_repo --edges demo_repo/declared_edges.json
 ```
 
-The `--edges` flag bypasses the Gemma 4 visual extraction and uses the
-pre-extracted contract file directly. This always works offline.
+3. Exit code 1: drift was found. Report each `!` line in the form `source -> target file:line` (undeclared import, dashed red arrow in `drift_report.md`), and each `~` line as a stale diagram edge (drawn but no import found, dotted amber arrow).
+4. Exit code 0: tell the user the code matches the diagram (`0 undeclared edges`).
+5. Exit code 2: the check could not run (missing file or bad input). Report the error message and stop.
 
-### Live Gemma 4 run (requires GEMMA_API_KEY or GOOGLE_API_KEY)
+## Rules
 
-```bash
-python -m archguard.cli check \
-  --diagram demo_repo/architecture.png \
-  --repo ./demo_repo
-```
-
-Gemma 4 reads `architecture.png`, identifies the directed edges, and returns
-them as structured JSON. The scanner then runs and compares.
-
-## Interpreting results
-
-### Drift detected (exit code 1)
-
-```
-⚠️  Architectural drift detected: 1 undeclared edge(s)
-   ! order_service -> database in order_service/checkout.py:2
-```
-
-Open `drift_report.md` in VS Code Markdown Preview to see the Mermaid diagram
-with the dashed red drift arrow highlighted.
-
-### Conformance (exit code 0)
-
-```
-✅ 0 undeclared edges. Codebase conforms 100% to architecture.png.
-```
-
-## What ArchGuard does NOT do
-
-- It does **not** patch or rewrite code automatically.
-- It does **not** forbid edges not shown in the diagram — it only flags them.
-- It does **not** suggest an adapter or refactoring strategy.
-- It does **not** scan non-Python files.
-
-Stop at the fail, the file, and the red arrow. The human decides what to do next.
+- An undeclared edge means the code imports a module the diagram did not draw. A missing arrow is not a stated ban, so do not call it a forbidden or illegal dependency.
+- Do not invent edges, severities, or rules that the diagram does not show.
+- Do not patch, edit, or suggest adapters for the code. Stop at the fail, the file and line, and the report.
+- To read the diagram live with Gemma 4 instead of the checked-in contract, omit `--edges` and set `GEMMA_API_KEY` and `GEMMA_MODEL_ID` in the environment. Never print or commit these values.

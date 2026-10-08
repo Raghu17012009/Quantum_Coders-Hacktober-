@@ -40,3 +40,5 @@ desktop.ini
 
 # Scratch scripts
 make_arch_png.py
+
+.pytest_cache/
