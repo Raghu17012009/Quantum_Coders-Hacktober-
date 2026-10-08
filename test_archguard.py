@@ -88,26 +88,34 @@ class ArchGuardIntegrationTests(unittest.TestCase):
 
     @staticmethod
     def _run_cli(contract: Path) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "archguard.cli",
-                "check",
-                "--diagram",
-                str(DEMO_REPO / "architecture.png"),
-                "--repo",
-                str(DEMO_REPO),
-                "--edges",
-                str(contract),
-            ],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
+        # Write reports to a temp dir so the tests never overwrite the committed
+        # drift_report.md in the repository root.
+        with tempfile.TemporaryDirectory() as reports:
+            return subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "archguard.cli",
+                    "check",
+                    "--diagram",
+                    str(DEMO_REPO / "architecture.png"),
+                    "--repo",
+                    str(DEMO_REPO),
+                    "--edges",
+                    str(contract),
+                    "--output-md",
+                    str(Path(reports) / "drift_report.md"),
+                    "--output-html",
+                    str(Path(reports) / "drift_report.html"),
+                ],
+                cwd=ROOT,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
 
 
 if __name__ == "__main__":
