@@ -67,7 +67,13 @@ Advantages:
 
 ## Innovation and Differentiation
 
-[Explain what is innovative about the approach and how it differs from existing or conventional solutions.]
+|Approach|	Limitation|	ArchDrift|
+|Manual updates and review checklists|	Easy to forget, and nothing enforces them |	Automated check that can fail CI|
+|Diagram-as-code tools (Mermaid, PlantUML, Structurizr)|	Still need humans to keep the text in sync with the code	|Compares the text against the code and flags mismatches|
+|Auto-generate diagrams from code	|Produces a new diagram but ignores the curated one, and gives no explanation of what changed|	Starts from the team's own diagram and reports the specific differences|
+|Asking an LLM to review the docs|	Unverifiable and inconsistent	|Deterministic graph diff with citations and confidence levels|
+
+In short: ArchDrift treats documentation drift as a detectable, explainable, and fixable bug, using AI only for the part that needs it, which is reading pictures.
 
 ## Technical Implementation
 
@@ -156,7 +162,6 @@ flowchart TD
     style DIFF fill:#d8f0e0,stroke:#2e8b57,stroke-width:2px
 ```
 
-**How to read it**
 - **Purple (Gemma 4):** the only AI step. It reads image diagrams and outputs structured JSON, which is validated before use.
 - **Green (Graph Diff Engine):** the deterministic core that decides what counts as drift, so every finding is explainable.
 - **Two parallel extraction paths** (diagram and code) feed one comparison, and the results fan out to the CLI, PR comments, CI status and a regenerated diagram.
@@ -165,15 +170,13 @@ flowchart TD
 
 | Category        | Technologies                |
 | --------------- | --------------------------- |
-| Frontend        | N/A for the core tool (CLI and CI output). Optional: a static HTML drift report      |
+| Frontend        | **N/A** for the core tool (CLI and CI output). Optional: a static HTML drift report      |
 | Backend         | Python 3.11+, Typer (CLI), Pydantic (graph and finding schemas), NetworkX (graph diff), Python ast and tree-sitter (code analysis), PyYAML (Docker Compose and Kubernetes parsing)       |
-| Database        | N/A. Graphs and reports are stored as JSON files       |
+| Database        | **N/A** Graphs and reports are stored as JSON files       |
 | AI / ML         | Gemma 4 (open-weight, multimodal) reads PNG/SVG diagrams and extracts nodes and edges as schema-constrained JSON. Served locally through Ollama, so the whole pipeline stays open-source |
 | Infrastructure  | GitHub Actions (CI drift check on pull requests), Docker (packaged CLI), pre-commit hook, pytest      |
 | APIs / Services | GitHub API (posts drift findings as PR comments), Mermaid CLI (mermaid-cli) to render and validate generated diagrams, agent skill interface           |
 
-
-If a category or technology is not implemented in the project, specify `N/A` instead of leaving the field blank.
 
 ### How It Works
 
@@ -189,10 +192,10 @@ If a category or technology is not implemented in the project, specify `N/A` ins
 
 ### Team Contributions
 
-- **[Member Name]:** [Contribution]
-- **[Member Name]:** [Contribution]
-- **[Member Name]:** [Contribution]
-- **[Member Name]:** [Contribution]
+- **Raghunathan B K:** [Contribution]
+- **Kaevin P:** [Contribution]
+- **Viswanath A G:** [Contribution]
+- **Sanjay Siddhakumar:** [Contribution]
 
 ## Working Application
 
