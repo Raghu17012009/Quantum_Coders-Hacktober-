@@ -1,4 +1,3 @@
-<img width="906" height="542" alt="image" src="https://github.com/user-attachments/assets/795a9a07-e0a9-44d8-ac78-2af2214d89d9" /># ArchDrift
 
 > ArchDrift is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
 
