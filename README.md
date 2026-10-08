@@ -80,8 +80,8 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
 
 ### Architecture
 
-'''mermaid
-    flowchart TD
+```mermaid
+flowchart TD
     A["architecture.png"] --> B{"--edges given?"}
     B -->|"yes: timed demo"| C["Load declared_edges.json"]
     B -->|"no: live beat"| D["Gemma 4 reads PNG + folder list"]
@@ -100,8 +100,7 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
     style D fill:#e8dcff,stroke:#7c5cd6,stroke-width:2px
     style M fill:#ffd6d6,stroke:#d33333,stroke-width:2px
     style N fill:#d8f0e0,stroke:#2e8b57,stroke-width:2px
-
-'''
+```
 
 ### Technology Stack
 
