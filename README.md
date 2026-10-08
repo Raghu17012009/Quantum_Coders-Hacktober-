@@ -80,7 +80,7 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
 
 ### Architecture
 
-
+'''mermaid
     A[architecture.png] --> B{--edges given?}
     B -- "yes (timed demo)" --> C[Load declared_edges.json]
     B -- "no (live beat)" --> D[Gemma 4 reads PNG + folder list]
@@ -95,7 +95,7 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
     K --> L{Any undeclared edges?}
     L -- yes --> M[Print source -> target in file:line<br/>write drift_report.md + html<br/>exit 1]
     L -- no --> N[Print: 0 undeclared edges<br/>write green report<br/>exit 0]
-
+'''
 
 ### Technology Stack
 
