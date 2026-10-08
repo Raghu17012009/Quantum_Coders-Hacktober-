@@ -1,196 +1,135 @@
+from __future__ import annotations
+
+import html
+import re
 from pathlib import Path
-from urllib.parse import quote
+
+MERMAID_CDN = "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
+
+
+def _node_id(name: str) -> str:
+    # Prefix so names like "end" / "graph" never collide with Mermaid keywords.
+    return "n_" + re.sub(r"\W", "_", name)
+
+
+def _label(text: str) -> str:
+    return text.replace('"', "'")
+
+
+def build_mermaid(
+    declared_edges: list[list[str]],
+    drift_records: list[dict],
+    stale_edges: list[dict] | None = None,
+) -> str:
+    """Mermaid flowchart: declared edges solid, stale amber dotted, drift red dashed."""
+    stale_pairs = {(s["source"], s["target"]) for s in (stale_edges or [])}
+
+    # One arrow per (source, target); keep the first site and count the rest.
+    drift_by_pair: dict[tuple[str, str], list[dict]] = {}
+    for item in drift_records:
+        drift_by_pair.setdefault((item["source"], item["target"]), []).append(item)
+
+    names: list[str] = []
+    for src, dst in declared_edges:
+        names += [src, dst]
+    for src, dst in drift_by_pair:
+        names += [src, dst]
+    names = list(dict.fromkeys(names))
+
+    lines = ["flowchart TD"]
+    for name in names:
+        lines.append(f'    {_node_id(name)}["{_label(name)}"]')
+
+    link_i = 0
+    stale_idx: list[int] = []
+    drift_idx: list[int] = []
+
+    for src, dst in declared_edges:
+        lines.append(f"    {_node_id(src)} --> {_node_id(dst)}")
+        if (src, dst) in stale_pairs:
+            stale_idx.append(link_i)
+        link_i += 1
+
+    for (src, dst), items in drift_by_pair.items():
+        first = items[0]
+        more = f" (+{len(items) - 1} more)" if len(items) > 1 else ""
+        label = _label(f"DRIFT: {first['file']}:{first['line']}{more}")
+        lines.append(f'    {_node_id(src)} -.->|"{label}"| {_node_id(dst)}')
+        drift_idx.append(link_i)
+        link_i += 1
+
+    for idx in stale_idx:
+        lines.append(f"    linkStyle {idx} stroke:#f59e0b,stroke-width:3px,stroke-dasharray: 2 4;")
+    for idx in drift_idx:
+        lines.append(f"    linkStyle {idx} stroke:#ff0000,stroke-width:3px,stroke-dasharray: 5 5;")
+
+    return "\n".join(lines)
 
 
 def generate_drift_assets(
     declared_edges: list[list[str]],
     drift_records: list[dict],
-    output_md: str = "drift_report.md",
+    output_mermaid: str = "drift_report.md",
     output_html: str = "drift_report.html",
+    stale_edges: list[dict] | None = None,
 ) -> str:
-    """
-    Generate drift_report.md (required) and drift_report.html (secondary).
+    stale_edges = stale_edges or []
+    mermaid_code = build_mermaid(declared_edges, drift_records, stale_edges)
 
-    Mermaid linkStyle indices are assigned in the order links are declared:
-      - indices 0..(N_declared-1)  → solid declared arrows  (green)
-      - indices N_declared..end    → dashed red drift arrows
+    # Markdown report with a Mermaid fence (renders in VS Code / GitHub).
+    Path(output_mermaid).write_text(f"```mermaid\n{mermaid_code}\n```\n", encoding="utf-8")
 
-    Parameters
-    ----------
-    declared_edges : list of [source, target] pairs from the architecture contract
-    drift_records  : list of dicts {source, target, file, line}
-    output_md      : path for the Markdown report (VS Code previewable, offline)
-    output_html    : path for the optional HTML report
-    """
-    is_drift = len(drift_records) > 0
-
-    # ── Collect all node names so we can style them individually ─────────────
-    declared_nodes: list[str] = []
-    for src, dst in declared_edges:
-        if src not in declared_nodes:
-            declared_nodes.append(src)
-        if dst not in declared_nodes:
-            declared_nodes.append(dst)
-
-    drift_sources = {item["source"] for item in drift_records}
-
-    # ── Build Mermaid lines ───────────────────────────────────────────────────
-    lines = ["flowchart TD"]
-
-    # Node label aliases  (box with icon prefix)
-    for node in declared_nodes:
-        icon = "🔴 " if node in drift_sources else ""
-        lines.append(f'    {node}["{icon}{node}"]')
-
-    link_i = 0
-    drift_idx = []
-    declared_idx = []
-
-    for src, dst in declared_edges:
-        lines.append(f"    {src} --> {dst}")
-        declared_idx.append(link_i)
-        link_i += 1
-
-    if drift_records:
-        for item in drift_records:
-            lines.append(
-                f'    {item["source"]} -.->|"DRIFT"| {item["target"]}'
-            )
-            drift_idx.append(link_i)
-            link_i += 1
-
-    # ── Node styles ───────────────────────────────────────────────────────────
-    for node in declared_nodes:
-        if node in drift_sources:
-            lines.append(
-                f"    style {node} fill:#fef3c7,stroke:#d97706,stroke-width:3px,"
-                f"color:#92400e,font-weight:bold"
-            )
-        else:
-            lines.append(
-                f"    style {node} fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e40af"
-            )
-
-    for idx in declared_idx:
-        lines.append(
-            f"    linkStyle {idx} stroke:#22c55e,stroke-width:2.5px;"
-        )
-    for idx in drift_idx:
-        lines.append(
-            f"    linkStyle {idx} stroke:#ef4444,stroke-width:3px,"
-            f"stroke-dasharray:8 4;"
-        )
-
-    mermaid_code = "\n".join(lines)
-
-    # ── drift_report.md ───────────────────────────────────────────────────────
-    md = ["# ArchGuard Drift Report\n\n"]
-    if is_drift:
-        noun = "import" if len(drift_records) == 1 else "imports"
-        md.append(f"## FAIL — {len(drift_records)} undeclared {noun}\n\n")
-        md.append("The code contains a dependency that is not declared in the architecture.\n\n")
-        md.append("### Detected Drift\n\n")
-        md.append("| Source | Target | File | Line |\n")
-        md.append("|---|---|---|---:|\n")
-        for item in drift_records:
-            source_path = quote(item["file"], safe="/._-")
-            md.append(
-                f"| `{item['source']}` | `{item['target']}` "
-                f"| [{item['file']}]({source_path}#L{item['line']}) "
-                f"| {item['line']} |\n"
-            )
-        md.append("\n### Architecture\n\n")
-        md.append("Solid arrows = declared architecture.<br>\n")
-        md.append("Red dashed arrows = undeclared code dependencies.\n\n")
-        md.append("### Source Location\n\n")
-        for item in drift_records:
-            source_path = quote(item["file"], safe="/._-")
-            md.append(
-                f"[{item['file']}:{item['line']}]"
-                f"({source_path}#L{item['line']})\n\n"
-            )
-        md.append(
-            "Review each dependency and either correct the code or update the "
-            "architecture contract if it is intentional.\n\n"
-        )
+    n_drift, n_stale = len(drift_records), len(stale_edges)
+    if n_drift or n_stale:
+        parts = []
+        if n_drift:
+            parts.append(f"{n_drift} undeclared import{'s' if n_drift != 1 else ''}")
+        if n_stale:
+            parts.append(f"{n_stale} stale diagram edge{'s' if n_stale != 1 else ''}")
+        header_text = "⚠️ Architectural Drift Detected (" + ", ".join(parts) + ")"
+        title_color = "#ef4444"
     else:
-        md.append("## PASS — 0 undeclared imports\n\n")
-        md.append("The code matches the documented architecture.\n\n")
-        md.append("## Architecture\n\n")
-        md.append("Green solid arrows = declared architecture.\n\n")
+        header_text = "✅ 100% Architectural Conformance"
+        title_color = "#22c55e"
 
-    md.append("```mermaid\n")
-    md.append(mermaid_code)
-    md.append("\n```\n")
-
-    Path(output_md).write_text("".join(md), encoding="utf-8")
-
-    # ── drift_report.html (secondary) ─────────────────────────────────────────
-    title_color = "#ef4444" if is_drift else "#22c55e"
-    header_text = (
-        f"⚠️ Architectural Drift Detected — {len(drift_records)} undeclared edge(s)"
-        if is_drift
-        else "✅ 0 undeclared edges — Codebase conforms to architecture"
-    )
-
-    drift_rows = ""
-    for item in drift_records:
-        source_path = quote(item["file"], safe="/._-")
-        drift_rows += (
-            f"<tr>"
-            f"<td><code>{item['source']}</code></td>"
-            f"<td><code>{item['target']}</code></td>"
-            f'<td><a href="{source_path}#L{item["line"]}">'
-            f"<code>{item['file']}:{item['line']}</code></a></td>"
-            f"</tr>\n"
+    details = ""
+    if drift_records:
+        rows = "".join(
+            f"<li><code>{html.escape(r['source'])} → {html.escape(r['target'])}</code> "
+            f"in {html.escape(r['file'])}:{r['line']}</li>"
+            for r in drift_records
         )
-
-    drift_table = ""
-    if drift_rows:
-        drift_table = f"""
-    <h2>Undeclared Edges</h2>
-    <table>
-      <tr><th>Source</th><th>Target</th><th>Location</th></tr>
-      {drift_rows}
-    </table>"""
+        details += f"<h2>Undeclared imports</h2><ul>{rows}</ul>"
+    if stale_edges:
+        rows = "".join(
+            f"<li><code>{html.escape(s['source'])} → {html.escape(s['target'])}</code> "
+            f"is drawn in the diagram but no import was found</li>"
+            for s in stale_edges
+        )
+        details += f"<h2>Stale diagram edges</h2><ul>{rows}</ul>"
 
     html_content = f"""<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>ArchGuard — Conformance Report</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-  <script>mermaid.initialize({{startOnLoad:true,theme:'base',
-    themeVariables:{{primaryColor:'#dbeafe',primaryBorderColor:'#3b82f6',
-    primaryTextColor:'#1e40af',edgeLabelBackground:'#f8fafc'}}}});</script>
+  <meta charset="utf-8">
+  <title>ArchGuard Conformance Report</title>
+  <script src="{MERMAID_CDN}"></script>
+  <script>mermaid.initialize({{startOnLoad: true, theme: 'neutral'}});</script>
   <style>
-    *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#f1f5f9;padding:2rem}}
-    .card{{background:#1e293b;border-radius:16px;padding:2rem;max-width:900px;margin:0 auto;box-shadow:0 4px 32px #0008}}
-    h1{{color:{title_color};font-size:1.3rem;margin-bottom:1.5rem;padding-bottom:0.75rem;border-bottom:1px solid #334155}}
-    h2{{color:#94a3b8;font-size:0.95rem;margin:1.5rem 0 0.5rem;text-transform:uppercase;letter-spacing:.05em}}
-    table{{border-collapse:collapse;width:100%;margin-top:0.5rem;font-size:0.875rem}}
-    th,td{{padding:0.5rem 0.75rem;border-bottom:1px solid #334155;text-align:left}}
-    th{{color:#64748b;font-weight:600}}
-    code{{background:#0f172a;padding:2px 6px;border-radius:4px;font-size:0.82rem;color:#93c5fd}}
-    .mermaid{{background:#0f172a;padding:1.5rem;border-radius:8px;margin-top:0.5rem}}
-    .legend{{display:flex;gap:1.5rem;font-size:0.8rem;color:#94a3b8;margin-bottom:1rem}}
-    .legend span{{display:flex;align-items:center;gap:0.4rem}}
+    body {{ font-family: system-ui, -apple-system, sans-serif; padding: 2rem; background: #0f172a; color: #f8fafc; }}
+    .card {{ background: #1e293b; border-radius: 12px; padding: 2rem; max-width: 800px; margin: 0 auto; }}
+    h1 {{ color: {title_color}; margin-top: 0; }}
+    h2 {{ font-size: 1.1rem; margin-top: 1.5rem; }}
+    pre.mermaid {{ background: #f8fafc; padding: 1.5rem; border-radius: 8px; }}
   </style>
 </head>
 <body>
   <div class="card">
     <h1>{header_text}</h1>
-    {drift_table}
-    <h2>Architecture Flow</h2>
-    <div class="legend">
-      <span>🟢 Declared edge</span>
-      {"<span>🔴 Drift edge (undeclared)</span>" if is_drift else ""}
-      {"<span>🟠 Drift source module</span>" if is_drift else ""}
-    </div>
-    <div class="mermaid">
-{mermaid_code}
-    </div>
+    <pre class="mermaid">
+{html.escape(mermaid_code, quote=False)}
+    </pre>
+    {details}
   </div>
 </body>
 </html>"""

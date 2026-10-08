@@ -15,13 +15,53 @@ def discover_modules(repo_root: str | Path) -> list[str]:
     )
 
 
+_DYNAMIC_IMPORTERS = {"import_module", "__import__"}
+
+
+def _import_targets(node: ast.AST, pkg_parts: list[str]) -> list[str]:
+    """Top-level names a single AST node imports (may be empty)."""
+    if isinstance(node, ast.Import):
+        return [a.name.split(".")[0] for a in node.names]
+
+    if isinstance(node, ast.ImportFrom):
+        if node.level == 0:
+            return [node.module.split(".")[0]] if node.module else []
+        # Relative import: climb (level - 1) packages from the file's own package.
+        up = node.level - 1
+        if up < len(pkg_parts):
+            return []  # still inside the file's own top-level package
+        if up > len(pkg_parts):
+            return []  # climbs above the repo root; not resolvable
+        # Exactly at the repo root: "from ..other import x" / "from .. import other"
+        if node.module:
+            return [node.module.split(".")[0]]
+        return [a.name for a in node.names if a.name != "*"]
+
+    if isinstance(node, ast.Call):
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if name in _DYNAMIC_IMPORTERS and node.args:
+            arg = node.args[0]
+            if (
+                isinstance(arg, ast.Constant)
+                and isinstance(arg.value, str)
+                and arg.value
+                and not arg.value.startswith(".")
+            ):
+                return [arg.value.split(".")[0]]
+    return []
+
+
 def scan_module_imports(
     repo_root: str | Path, module_names: list[str]
 ) -> list[tuple[str, str, str, int]]:
-    """Find absolute imports from one listed package into another.
+    """Find imports from one listed package into another.
 
     Returns (source_module, target_module, relative_path, line_number).
-    Self-imports, relative imports, unreadable files and syntax errors are ignored.
+    Detected: ``import x``, ``from x import y`` (including ``import x.y as z``),
+    relative imports that climb out of the package (``from ..x import y``), and
+    ``importlib.import_module("x")`` / ``__import__("x")`` with a literal name.
+    Self-imports, unreadable files and syntax errors are ignored.
     """
     edges: list[tuple[str, str, str, int]] = []
     repo = Path(repo_root)
@@ -35,19 +75,14 @@ def scan_module_imports(
         for py_file in sorted(mod_dir.rglob("*.py")):
             try:
                 tree = ast.parse(py_file.read_text(encoding="utf-8"))
-            except (SyntaxError, UnicodeDecodeError):
+            except (SyntaxError, UnicodeDecodeError, OSError):
                 continue
 
-            rel = py_file.relative_to(repo).as_posix()
+            rel_path = py_file.relative_to(repo)
+            pkg_parts = list(rel_path.parts[:-1])
+            rel = rel_path.as_posix()
             for node in ast.walk(tree):
-                targets: list[str] = []
-                if isinstance(node, ast.Import):
-                    targets = [a.name.split(".")[0] for a in node.names]
-                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                    # level == 0 means an absolute import; "from .x import y" is skipped.
-                    targets = [node.module.split(".")[0]]
-
-                for target in dict.fromkeys(targets):  # de-dupe per line, keep order
+                for target in dict.fromkeys(_import_targets(node, pkg_parts)):
                     if target in known and target != mod:
                         edges.append((mod, target, rel, node.lineno))
 
