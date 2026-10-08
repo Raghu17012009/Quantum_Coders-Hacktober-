@@ -81,90 +81,21 @@ In short: ArchGuard treats documentation drift as a detectable, explainable, and
 ### Architecture
 
 
-```mermaid
-flowchart TD
-    subgraph Input["Repository Input"]
-        A1[Mermaid diagrams<br/>.md / .mmd]
-        A2[SVG diagrams]
-        A3[PNG diagrams]
-        A4[Source code<br/>routes, imports, ASTs]
-        A5[Config files<br/>docker-compose, k8s, .env]
-    end
+    A[architecture.png] --> B{--edges given?}
+    B -- "yes (timed demo)" --> C[Load declared_edges.json]
+    B -- "no (live beat)" --> D[Gemma 4 reads PNG + folder list]
+    D --> E[Strip fences, normalize names, keep only known folders]
+    E --> F[Declared edges]
+    C --> F
+    G[demo_repo] --> H[Discover modules: folders with __init__.py]
+    H --> I[ast scan: absolute imports between modules]
+    I --> J[Actual edges with file + line]
+    F --> K[Diff: actual minus declared]
+    J --> K
+    K --> L{Any undeclared edges?}
+    L -- yes --> M[Print source -> target in file:line<br/>write drift_report.md + html<br/>exit 1]
+    L -- no --> N[Print: 0 undeclared edges<br/>write green report<br/>exit 0]
 
-    D[Diagram Discovery<br/>scans repo for diagrams]
-
-    subgraph Diagram["Diagram Graph Extraction"]
-        P1[Mermaid / SVG Parser<br/>deterministic]
-        G4[Gemma 4 multimodal<br/>via Ollama]
-        S[Schema validation<br/>Pydantic JSON nodes + edges]
-    end
-
-    subgraph Code["Code Graph Extraction"]
-        C1[Static analysis<br/>ast + tree-sitter]
-        C2[Config parser<br/>PyYAML]
-    end
-
-    DG[(Diagram Graph)]
-    CG[(Code Graph)]
-
-    M[Component Matcher<br/>names, paths, config]
-    DIFF[Graph Diff Engine<br/>NetworkX]
-
-    subgraph Findings["Drift Classification"]
-        F1[Missing in diagram]
-        F2[Stale in diagram]
-        F3[Changed connection]
-    end
-
-    R[Drift Report<br/>file:line evidence + confidence]
-    GEN[Mermaid Generator<br/>updated diagram]
-    V[mermaid-cli<br/>render + validate]
-
-    subgraph Output["Outputs"]
-        O1[CLI report<br/>ArchGuard check]
-        O2[GitHub PR comment]
-        O3[Updated Mermaid diagram<br/>replaces stale image]
-        O4[CI pass / fail]
-    end
-
-    A1 --> D
-    A2 --> D
-    A3 --> D
-    D --> P1
-    D --> G4
-    P1 --> S
-    G4 --> S
-    S --> DG
-
-    A4 --> C1
-    A5 --> C2
-    C1 --> CG
-    C2 --> CG
-
-    DG --> M
-    CG --> M
-    M --> DIFF
-    DIFF --> F1
-    DIFF --> F2
-    DIFF --> F3
-    F1 --> R
-    F2 --> R
-    F3 --> R
-    R --> GEN
-    GEN --> V
-
-    R --> O1
-    R --> O2
-    R --> O4
-    V --> O3
-
-    style G4 fill:#e8dcff,stroke:#7c5cd6,stroke-width:2px
-    style DIFF fill:#d8f0e0,stroke:#2e8b57,stroke-width:2px
-```
-
-- **Purple (Gemma 4):** the only AI step. It reads image diagrams and outputs structured JSON, which is validated before use.
-- **Green (Graph Diff Engine):** the deterministic core that decides what counts as drift, so every finding is explainable.
-- **Two parallel extraction paths** (diagram and code) feed one comparison, and the results fan out to the CLI, PR comments, CI status and a regenerated diagram.
 
 ### Technology Stack
 
