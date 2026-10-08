@@ -40,7 +40,11 @@ def scan_module_imports(repo_root: str, module_names: list[str]) -> list[tuple[s
                 targets = []
                 if isinstance(node, ast.Import):
                     targets = [a.name.split(".")[0] for a in node.names]
-                elif isinstance(node, ast.ImportFrom) and node.module:
+                elif (
+                    isinstance(node, ast.ImportFrom)
+                    and node.level == 0
+                    and node.module
+                ):
                     targets = [node.module.split(".")[0]]
 
                 for target in targets:

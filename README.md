@@ -1,84 +1,294 @@
 # ArchGuard
 
-> ArchGuard is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
+> **ArchGuard** checks whether Python package imports match the architecture documented by the repository's diagram. The diagram is the contract. Undeclared imports are drift.
+
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+---
 
 ## Team
 
-**Team Name:** Quantum_Coders
+**Team Name:** Quantum\_Coders
+**Event:** Hacktoberfest Hack Day · Amrita Coimbatore · INIT × iDEA × MLH · 8 Oct 2026
 
+| Member | Role |
+|---|---|
+| Raghunathan B K | Team Lead — CLI, SKILL.md, integration |
+| Kaevin P | Gemma 4 multimodal extraction |
+| Viswanath A G | AST scanner, diff engine |
+| Sanjay Siddhakumar | Demo repo, visualizer, README, GitHub |
 
-| Member | Contribution   |
-| ------ | -------------- |
-| Raghunathan B K | Team Leader |
-| Kaevin P | Member |
-| Viswanath A G | Member |
-| Sanjay Siddhakumar | Member |
+---
 
+## What is ArchGuard?
 
-## Problem Statement
+ArchGuard is a **visual architecture conformance linter**.
 
-### The Problem
+The architecture diagram (`architecture.png`) is the documented contract for the
+codebase. ArchGuard extracts the directed edges from that diagram using **Gemma 4**,
+then scans every Python source file with a deterministic **AST scanner** to find the
+actual cross-module imports. Any import that exists in the code but is absent from
+the diagram is reported as **architectural drift**.
 
-Architecture diagrams are created once and rarely revised. Usually, the architecture diagram in the docs or README was correct at the time it was created. After that, the code has likely evolved - a service was split, a database switched, a cache introduced, an API endpoint renamed, etc. But the architecture diagram remains unchanged, and nothing in the development process evaluates the diagram.
+---
 
-Consequence 1: For new engineers and new contributors, the architecture diagram is a primary source for gaining insight into the system. If the architecture diagram is incorrect, new engineers and contributors will form an incorrect mental model of the system and either waste hours working on incorrect relationships or deploy changes based on non-existent relationships.
+## Problem
 
-Consequence 2: Security personnel, auditors and reviewers all make judgments based on trust and data flow diagrams that may or may not reflect the current state of the system.
+Architecture diagrams are created once and rarely updated. A senior engineer draws a
+clean picture — `Billing → DataAccess → Database` — exports it as `architecture.png`,
+and drops it in the README. The picture is the contract.
 
-Consequence 3: Senior developers and maintainers end up as the human source of truth, explaining "ignore the diagram, it's outdated" again and again.
+Then a pull request lands. Inside `billing/routes.py` someone writes a direct database
+import. The app still runs. The boundary is gone. Nobody notices until the codebase is
+a monolith nobody can draw anymore.
 
-Consequence 4: Open-source projects lose potential contributors when the docs don't match the code.
+**Example:**
 
-### Why We Chose This Problem
+```
+Diagram says:
+    order_service → inventory_service
 
-A problem that everyone has encountered. Most engineers have at some point trusted a diagram within a README file and found that the actual implementation has changed from the diagram. This is something that occurs regularly, and no one owns the solution to it. Diagrams tend to become outdated, and teams will complain about this but rarely take action on it. Updating a diagram is a manual process, and no one tends to have a sense of urgency for it.
-A gap in the existing tooling. We have testing, type checking, code analysis and CI for code. There is no similar tooling for documentation, particularly diagrams. This is an example of something that could be machine verified yet currently isn't.
-This is now solvable with recent AI. Code is text-based, and diagrams are visual which made automation of this difficult previously. Multimodal AI can now interpret diagrams, whilst code analysis tools can extract the actual implementation of a system. By combining this we can move from "diagram drift" being an ambiguous issue to one that can be identified and surfaced with evidence by an automation tool.
+Code also contains:
+    order_service → database   ← undeclared dependency
+```
 
+This direct database import was never drawn in the architecture diagram.
+The codebase has drifted from its documented design.
 
-## Solution
+Tools like Tach and import-linter exist for Python, but they require a hand-written
+TOML or YAML contract that almost nobody maintains. **ArchGuard reads the PNG —**
+the one contract the repo actually has.
 
-Support for finding diagrams (PNG, SVG, Mermaid)
-Parse diagrams (Mermaid, SVG or image using a multimodal model) and extract a graph
-Parse code (connection strings, imports, route definitions, Docker/Kubernetes configurations) and extract a graph
-Compare the graphs and report differences in:
-•	out-of-sync components
-•	stale components
-•	changed connections
+---
 
-Report drift with confidence and evidence, such as:
+## How It Works
 
-**"Diagram shows Auth → SQLite but routes via Redis at line v2/auth.py:42."**
+```
+architecture.png
+      │
+      ▼  Gemma 4 (multimodal visual extraction)
+declared edges  ← or --edges declared_edges.json (offline)
 
-Compare graphs and generate a new Mermaid diagram to replace the out-of-date diagram in the same pull request
+Python source files
+      │
+      ▼  Python AST scanner (stdlib ast only)
+actual imports  (file + line)
 
-Advantages:
-•	Graph extraction is purely structural
-•	Drift analysis is deterministic, and all reports are explainable
-•	Can be run as an agent skill or CLI or as a GitHub Action
-•	Out-of-date diagrams cause failures in CI like any other linting issue
+actual imports − declared edges
+      │
+      ▼
+drift
+      ├── terminal: file + line, exit 1 (drift) or exit 0 (clean)
+      ├── drift_report.md   — Mermaid diagram, works offline in VS Code
+      └── drift_report.html — red/green HTML summary
+```
 
-### Key Features
+### Gemma 4's Role
 
-- [Feature 1]
-- [Feature 2]
-- [Feature 3]
-- [Feature 4]
+Gemma 4 is used for **multimodal visual extraction of architecture edges from the
+diagram**. It receives the PNG plus the list of top-level folder names and returns
+only directed edges whose both ends are known module names.
 
-## Innovation and Differentiation
+Gemma 4 is **not** used to make the final drift decision. The diff is deterministic:
+an edge is drift if and only if it appears in the scanned code and is absent from the
+declared architecture graph.
 
-| Approach | Limitation | ArchGuard |
-| --- | --- | --- |
-| Manual updates and review checklists | Easy to forget, and nothing enforces them | Automated check that can fail CI |
-| Diagram-as-code tools (Mermaid, PlantUML, Structurizr) | Still need humans to keep the text in sync with the code | Compares the text against the code and flags mismatches |
-| Auto-generate diagrams from code | Produces a new diagram but ignores the curated one, and gives no explanation of what changed | Starts from the team's own diagram and reports the specific differences |
-| Asking an LLM to review the docs | Unverifiable and inconsistent | Deterministic graph diff with citations and confidence levels |
+### Deterministic Check
 
-In short: ArchGuard treats documentation drift as a detectable, explainable, and fixable bug, using AI only for the part that needs it, which is reading pictures.
+ArchGuard reports an edge as drift when:
 
-## Technical Implementation
+> It exists in the scanned code **AND** is absent from the declared architecture graph.
 
-### Architecture
+Nothing else triggers a report. There is no speculation, no heuristic severity, and
+no automatic fix.
+
+---
+
+## Demo Repository
+
+The `demo_repo/` directory contains a minimal four-module Python system designed to
+demonstrate architecture drift detection.
+
+### Module structure
+
+```
+demo_repo/
+├── architecture.png          ← the architecture contract
+├── declared_edges.json       ← offline copy of the declared edges
+├── api_gateway/
+│   ├── __init__.py
+│   └── router.py             ← imports order_service  (declared ✅)
+├── order_service/
+│   ├── __init__.py
+│   └── checkout.py           ← imports inventory_service (declared ✅)
+│                               imports database           (DRIFT ❌)
+├── inventory_service/
+│   ├── __init__.py
+│   └── stock.py              ← imports database  (declared ✅)
+└── database/
+    ├── __init__.py
+    └── connection.py         ← no outgoing imports
+```
+
+### Architecture diagram
+
+The diagram declares exactly these three edges:
+
+```
+┌─────────────┐
+│ api_gateway │
+└──────┬──────┘
+       │
+       ▼
+┌────────────────┐
+│ order_service  │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────────┐
+│ inventory_service  │
+└─────────┬──────────┘
+          │
+          ▼
+     ┌──────────┐
+     │ database │
+     └──────────┘
+```
+
+### Planted drift
+
+`demo_repo/order_service/checkout.py` line 2 contains:
+
+```python
+from database.connection import raw_sql_query   # DRIFT — not in diagram
+```
+
+This creates the undeclared edge `order_service → database`.
+That edge is **not** present in `declared_edges.json` and is **not** drawn in
+`architecture.png`. It is the single intentional drift in the demo.
+
+---
+
+## Drift Report Screenshot
+
+![ArchGuard drift report showing dashed red arrow for order_service → database](docs/drift-screenshot.png)
+
+*VS Code Markdown Preview of `drift_report.md` — the dashed red arrow is the undeclared `order_service → database` edge.*
+
+---
+
+## Running ArchGuard
+
+### Prerequisites
+
+- Python 3.11+
+- No third-party packages required for the offline/demo run
+- `Pillow` only needed to regenerate `architecture.png` (already committed)
+
+### Installation
+
+```bash
+git clone https://github.com/<your-org>/Quantum_Coders-Hacktober-
+cd Quantum_Coders-Hacktober-
+```
+
+No `pip install` required for the demo. All scanner logic uses Python stdlib (`ast`,
+`pathlib`, `json`, `argparse`).
+
+### Environment variables (live Gemma run only)
+
+```bash
+cp .env.example .env
+# Edit .env and set GEMMA_API_KEY or GOOGLE_API_KEY
+```
+
+If you use the `--edges` flag (recommended for the demo), no API key is needed.
+
+---
+
+## Demo Commands
+
+### Expected failure — drift detected
+
+Run with the offline contract (no API key needed):
+
+```bash
+python -m archguard.cli check \
+  --diagram demo_repo/architecture.png \
+  --repo ./demo_repo \
+  --edges demo_repo/declared_edges.json
+```
+
+**Expected output:**
+
+```
+⚠️  Architectural drift detected: 1 undeclared edge(s)
+   ! order_service -> database in order_service/checkout.py:2
+
+Reports generated: drift_report.md, drift_report.html
+```
+
+**Exit code: 1**
+
+Open `drift_report.md` in VS Code Markdown Preview to see the Mermaid diagram with
+the dashed red drift arrow:
+
+```mermaid
+flowchart TD
+    api_gateway --> order_service
+    order_service --> inventory_service
+    inventory_service --> database
+    order_service -.->|DRIFT: line 2| database
+    linkStyle 3 stroke:#ff0000,stroke-width:3px,stroke-dasharray: 5 5;
+```
+
+### Expected pass — conformance after fix
+
+Comment out or remove the planted import in `demo_repo/order_service/checkout.py`:
+
+```python
+# from database.connection import raw_sql_query   ← remove this line
+```
+
+Re-run the same command:
+
+```bash
+python -m archguard.cli check \
+  --diagram demo_repo/architecture.png \
+  --repo ./demo_repo \
+  --edges demo_repo/declared_edges.json
+```
+
+**Expected output:**
+
+```
+✅ 0 undeclared edges. Codebase conforms 100% to architecture.png.
+Reports generated: drift_report.md, drift_report.html
+```
+
+**Exit code: 0**
+
+### Live Gemma 4 run (requires API key)
+
+Install the optional live-extraction client first:
+
+```bash
+python -m pip install google-genai
+```
+
+```bash
+python -m archguard.cli check \
+  --diagram demo_repo/architecture.png \
+  --repo ./demo_repo
+```
+
+Gemma 4 reads `architecture.png`, identifies the directed edges, and returns them as
+structured JSON. The printed edges show the vision step in real time. The scanner and
+diff then run identically.
+
+---
+
+## Project Architecture
 
 ```mermaid
 flowchart TD
@@ -102,134 +312,90 @@ flowchart TD
     style N fill:#d8f0e0,stroke:#2e8b57,stroke-width:2px
 ```
 
-### Technology Stack
+---
 
-| Category        | Technologies                |
-| --------------- | --------------------------- |
-| Frontend        | **N/A** for the core tool (CLI and CI output). Optional: a static HTML drift report      |
-| Backend         | Python 3.11+, Typer (CLI), Pydantic (graph and finding schemas), NetworkX (graph diff), Python ast and tree-sitter (code analysis), PyYAML (Docker Compose and Kubernetes parsing)       |
-| Database        | **N/A** Graphs and reports are stored as JSON files       |
-| AI / ML         | Gemma 4 (open-weight, multimodal) reads PNG/SVG diagrams and extracts nodes and edges as schema-constrained JSON. Served locally through Ollama, so the whole pipeline stays open-source |
-| Infrastructure  | GitHub Actions (CI drift check on pull requests), Docker (packaged CLI), pre-commit hook, pytest      |
-| APIs / Services | GitHub API (posts drift findings as PR comments), Mermaid CLI (mermaid-cli) to render and validate generated diagrams, agent skill interface           |
+## Limitations
 
+- The scanner currently supports **Python only** (stdlib `ast`).
+- It checks **top-level package import relationships** — it does not reconstruct the
+  full runtime call graph.
+- PNG visual extraction depends on **Gemma 4 multimodal interpretation** — label the
+  diagram with exact folder names (not nicknames) for reliable extraction.
+- The architecture diagram is treated as the **documented contract**. A missing arrow
+  is reported as drift; it is not automatically classified as a forbidden boundary
+  unless the diagram says so.
+- ArchGuard **does not patch code** and does not suggest adapters or refactorings.
 
-### How It Works
-
-[Explain the major components of the system and how they interact.]
-
-### Technical Decisions
-
-[Explain important architectural, algorithmic, or engineering decisions made during development.]
-
-## Implementation During the Hackathon
-
-[Describe what the team built during the Hack Day and the major functionality or components completed during the event.]
-
-### Team Contributions
-
-- **Raghunathan B K:** [Contribution]
-- **Kaevin P:** [Contribution]
-- **Viswanath A G:** [Contribution]
-- **Sanjay Siddhakumar:** [Contribution]
-
-## Working Application
-
-**Live Application:** [Live URL]
-
-[Briefly explain how the deployed application can be accessed and what functionality can be tested.]
-
-The submitted application should be functional and accessible through the provided link where applicable.
-
-## Demo Video
-
-**Demo Video:** [Video URL]
-
-[Provide a short demonstration of the working project, covering the main user flow and important functionality.]
+---
 
 ## Open Source and AI Usage
 
 ### AI / Models
 
-- **[Model]:** [How it is used]
+- **Gemma 4 (open-weight, multimodal):** Visual extraction of architecture edges from
+  `architecture.png`. Returns structured JSON; does not make the drift decision.
 
 ### Open Source Components
 
-- **[Library / Framework]:** [Purpose]
-- **[Dataset]:** [Purpose]
-- **[API / Service]:** [Purpose]
+- **Python `ast` module (stdlib):** Deterministic source code import scanner.
+- **Python `pathlib`, `json`, `argparse` (stdlib):** CLI and file handling.
+- **Pillow:** Used only to generate `demo_repo/architecture.png`.
 
-[Include relevant licenses, attribution, and acknowledgements for external components.]
+---
 
-## Setup and Usage
+## Repository Structure
 
-### Prerequisites
+```
+.
+├── archguard/
+│   ├── __init__.py
+│   ├── cli.py              # CLI entry point
+│   ├── dag_extractor.py    # Gemma 4 visual extraction
+│   ├── ast_scanner.py      # Deterministic AST import scanner
+│   ├── diff_engine.py      # Set difference: actual − declared
+│   └── visualizer.py       # drift_report.md + drift_report.html
+├── skills/
+│   └── archguard/
+│       └── SKILL.md        # Agent Skill Open Standard
+├── demo_repo/
+│   ├── architecture.png    # Four-box diagram (the contract)
+│   ├── declared_edges.json # Offline contract copy
+│   ├── api_gateway/
+│   ├── order_service/      # Contains the planted drift
+│   ├── inventory_service/
+│   └── database/
+├── .env.example            # Key names only — no secrets
+├── .gitignore
+├── LICENSE                 # MIT
+└── README.md
+```
 
-- [Requirement]
-- [Requirement]
+The live extractor uses the optional `google-genai` package and reads the API key
+from `GEMMA_API_KEY` or `GOOGLE_API_KEY`. Set `ARCHGUARD_MODEL` to override the
+model name. The offline `--edges` path uses only the Python standard library and
+does not contact the API.
 
-### Installation
+When drift is found, the Markdown and HTML reports link each finding to its source
+file and line. Use `--interactive` for an optional human decision prompt:
 
 ```bash
-git clone [repository-url]
-cd [project-directory]
-[installation-command]
+python -m archguard.cli check --repo ./demo_repo \
+  --edges demo_repo/declared_edges.json --interactive
 ```
 
-### Environment Variables
+The prompt is diagnostic only. It never edits the source code, PNG, or edge
+contract. CI remains non-interactive by default.
 
-```env
-[VARIABLE_NAME]=[value]
-```
-
-
-
-### Running the Project
-
-```bash
-[run-command]
-```
-
-### Usage
-
-[Explain the basic steps required to use the project.]
-
-## Devpost Submission
-
-**Devpost Project:** [Devpost Project URL]
-
-[Add the link to the team's Devpost submission. Ensure the Devpost project page is complete and contains the required project information, links, media, and team details.]
+---
 
 ## Credits and License
 
 ### Credits
 
-[Credit libraries, frameworks, datasets, models, APIs, contributors, and other external resources used.]
+- Gemma 4 — Google DeepMind (open-weight multimodal model)
+- Python `ast` — Python Software Foundation
+- Pillow — Python Imaging Library contributors
 
 ### License
 
-[License name and/or link.]
-
-## Submission Checklist
-
-- [ ] Project title and description added
-- [ ] All team members listed
-- [ ] Problem clearly explained
-- [ ] Reason for choosing the problem explained
-- [ ] Solution and key features documented
-- [ ] Innovation and differentiation explained
-- [ ] Architecture included
-- [ ] Technical implementation documented
-- [ ] Work completed during the hackathon documented
-- [ ] Team contributions documented
-- [ ] Working application is functional
-- [ ] Live application link added where applicable
-- [ ] Demo video added
-- [ ] AI and open-source components documented
-- [ ] Setup and usage instructions tested
-- [ ] Challenges and learnings documented
-- [ ] Devpost submission completed
-- [ ] Devpost link added
-- [ ] Credits added
-- [ ] License added
-- [ ] Repository is organized and complete
+[MIT License](LICENSE) — Copyright © 2026 Raghunathan B K and Quantum\_Coders team.

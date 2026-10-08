@@ -1,7 +1,10 @@
 import argparse
-import json
 import sys
 from pathlib import Path
+
+# Ensure UTF-8 output on Windows (avoids cp1252 crash with emoji)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from .ast_scanner import discover_modules, scan_module_imports
 from .diff_engine import find_drift
@@ -47,6 +50,11 @@ def main():
         default="drift_report.html",
         help="Path for generated HTML visual report"
     )
+    check_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Ask whether each drift is intentional after generating reports"
+    )
 
     args = parser.parse_args()
 
@@ -63,16 +71,16 @@ def main():
             sys.exit(2)
 
         # 2. Extract declared edges
-        if args.edges and Path(args.edges).exists():
-            with open(args.edges, "r", encoding="utf-8") as f:
-                declared_edges = json.load(f).get("declared_edges", [])
-        else:
-            try:
-                from .dag_extractor import extract_declared_edges
-                declared_edges = extract_declared_edges(args.diagram, modules)
-            except (ImportError, Exception) as e:
-                print(f"[ERROR] Gemma 4 API bridge failed ({e}). Provide --edges <contract.json> for offline fallback.", file=sys.stderr)
-                sys.exit(2)
+        try:
+            from .dag_extractor import extract_declared_edges
+            declared_edges = extract_declared_edges(
+                args.diagram,
+                modules,
+                fallback_file=args.edges,
+            )
+        except (FileNotFoundError, ImportError, OSError, RuntimeError, ValueError) as exc:
+            print(f"[ERROR] Unable to extract declared edges: {exc}", file=sys.stderr)
+            sys.exit(2)
 
         # 3. Scan imports
         actual_records = scan_module_imports(str(repo_path), modules)
@@ -89,6 +97,17 @@ def main():
             for item in drift:
                 print(f"   ! {item['source']} -> {item['target']} in {item['file']}:{item['line']}")
             print(f"\nReports generated: {args.output_md}, {args.output_html}")
+            if args.interactive:
+                print("\nReview decision: is this dependency intentional?")
+                print("  y = architecture changed; update the contract manually")
+                print("  n = code should be corrected")
+                answer = input("Choose [y/n]: ").strip().lower()
+                if answer in {"y", "yes"}:
+                    print("Decision recorded: review and update the architecture contract manually.")
+                elif answer in {"n", "no"}:
+                    print("Decision recorded: review and correct the source import manually.")
+                else:
+                    print("No decision recorded. Re-run with --interactive and choose y or n.")
             sys.exit(1)
         else:
             print(f"✅ 0 undeclared edges. Codebase conforms 100% to {Path(args.diagram).name}.")
