@@ -1,0 +1,3 @@
+# Offline master-test path needs only the Python standard library.
+# Live Gemma mode:
+google-genai>=1.0.0
