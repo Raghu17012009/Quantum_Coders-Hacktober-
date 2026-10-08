@@ -1,6 +1,6 @@
-# ArchDrift
+# ArchGuard
 
-> ArchDrift is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
+> ArchGuard is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
 
 ## Team
 
@@ -67,14 +67,14 @@ Advantages:
 
 ## Innovation and Differentiation
 
-| Approach | Limitation | ArchDrift |
+| Approach | Limitation | ArchGuard |
 | --- | --- | --- |
 | Manual updates and review checklists | Easy to forget, and nothing enforces them | Automated check that can fail CI |
 | Diagram-as-code tools (Mermaid, PlantUML, Structurizr) | Still need humans to keep the text in sync with the code | Compares the text against the code and flags mismatches |
 | Auto-generate diagrams from code | Produces a new diagram but ignores the curated one, and gives no explanation of what changed | Starts from the team's own diagram and reports the specific differences |
 | Asking an LLM to review the docs | Unverifiable and inconsistent | Deterministic graph diff with citations and confidence levels |
 
-In short: ArchDrift treats documentation drift as a detectable, explainable, and fixable bug, using AI only for the part that needs it, which is reading pictures.
+In short: ArchGuard treats documentation drift as a detectable, explainable, and fixable bug, using AI only for the part that needs it, which is reading pictures.
 
 ## Technical Implementation
 
@@ -122,7 +122,7 @@ flowchart TD
     V[mermaid-cli<br/>render + validate]
 
     subgraph Output["Outputs"]
-        O1[CLI report<br/>archdrift check]
+        O1[CLI report<br/>ArchGuard check]
         O2[GitHub PR comment]
         O3[Updated Mermaid diagram<br/>replaces stale image]
         O4[CI pass / fail]
