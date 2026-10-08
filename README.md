@@ -67,11 +67,11 @@ Advantages:
 
 ## Innovation and Differentiation
 
-|Approach|	Limitation|	ArchDrift|
-|Manual updates and review checklists|	Easy to forget, and nothing enforces them |	Automated check that can fail CI|
-|Diagram-as-code tools (Mermaid, PlantUML, Structurizr)|	Still need humans to keep the text in sync with the code	|Compares the text against the code and flags mismatches|
-|Auto-generate diagrams from code	|Produces a new diagram but ignores the curated one, and gives no explanation of what changed|	Starts from the team's own diagram and reports the specific differences|
-|Asking an LLM to review the docs|	Unverifiable and inconsistent	|Deterministic graph diff with citations and confidence levels|
+| Approach |	Limitation |	ArchDrift |
+| Manual updates and review checklists |	Easy to forget, and nothing enforces them |	Automated check that can fail CI |
+| Diagram-as-code tools (Mermaid, PlantUML, Structurizr) | Still need humans to keep the text in sync with the code | Compares the text against the code and flags mismatches |
+| Auto-generate diagrams from code	| Produces a new diagram but ignores the curated one, and gives no explanation of what changed |	Starts from the team's own diagram and reports the specific differences |
+| Asking an LLM to review the docs |	Unverifiable and inconsistent	| Deterministic graph diff with citations and confidence levels |
 
 In short: ArchDrift treats documentation drift as a detectable, explainable, and fixable bug, using AI only for the part that needs it, which is reading pictures.
 
