@@ -1,3 +1,4 @@
+# ArchDrift
 
 > ArchDrift is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
 
