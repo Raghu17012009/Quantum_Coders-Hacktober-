@@ -1,6 +1,6 @@
-# [Project Name]
+# ArchDrift
 
-> [One-line description of the project and what it does.]
+> ArchDrift is a linter that compares the architecture diagrams in your repo (Mermaid, PNG or SVG) against your actual code, flags where they've drifted apart, and generates an updated Mermaid diagram to fix them.
 
 ## Team
 
@@ -19,15 +19,40 @@
 
 ### The Problem
 
-[Describe the problem being addressed, who is affected by it, and the context in which it occurs.]
+Architecture diagrams are created once and rarely revised. Usually, the architecture diagram in the docs or README was correct at the time it was created. After that, the code has likely evolved - a service was split, a database switched, a cache introduced, an API endpoint renamed, etc. But the architecture diagram remains unchanged, and nothing in the development process evaluates the diagram.
+
+Consequence 1: For new engineers and new contributors, the architecture diagram is a primary source for gaining insight into the system. If the architecture diagram is incorrect, new engineers and contributors will form an incorrect mental model of the system and either waste hours working on incorrect relationships or deploy changes based on non-existent relationships.
+
+Consequence 2: Security personnel, auditors and reviewers all make judgments based on trust and data flow diagrams that may or may not reflect the current state of the system.
+
+Consequence 3: Senior developers and maintainers end up as the human source of truth, explaining "ignore the diagram, it's outdated" again and again.
+
+Consequence 4: Open-source projects lose potential contributors when the docs don't match the code.
 
 ### Why We Chose This Problem
 
-[Explain why the team selected this problem and why solving it is important.]
+A problem that everyone has encountered. Most engineers have at some point trusted a diagram within a README file and found that the actual implementation has changed from the diagram. This is something that occurs regularly, and no one owns the solution to it. Diagrams tend to become outdated, and teams will complain about this but rarely take action on it. Updating a diagram is a manual process, and no one tends to have a sense of urgency for it.
+A gap in the existing tooling. We have testing, type checking, code analysis and CI for code. There is no similar tooling for documentation, particularly diagrams. This is an example of something that could be machine verified yet currently isn't.
+This is now solvable with recent AI. Code is text-based, and diagrams are visual which made automation of this difficult previously. Multimodal AI can now interpret diagrams, whilst code analysis tools can extract the actual implementation of a system. By combining this we can move from "diagram drift" being an ambiguous issue to one that can be identified and surfaced with evidence by an automation tool.
+
 
 ## Solution
 
-[Describe the proposed solution and how it addresses the problem.]
+Support for finding diagrams (PNG, SVG, Mermaid)
+Parse diagrams (Mermaid, SVG or image using a multimodal model) and extract a graph
+Parse code (connection strings, imports, route definitions, Docker/Kubernetes configurations) and extract a graph
+Compare the graphs and report differences in:
+•	out-of-sync components
+•	stale components
+•	changed connections
+Report drift with confidence and evidence, such as:
+"Diagram shows Auth → SQLite but routes via Redis at line v2/auth.py:42.*
+Compare graphs and generate a new Mermaid diagram to replace the out-of-date diagram in the same pull request
+Advantages:
+•	Graph extraction is purely structural
+•	Drift analysis is deterministic, and all reports are explainable
+•	Can be run as an agent skill or CLI or as a GitHub Action
+•	Out-of-date diagrams cause failures in CI like any other linting issue
 
 ### Key Features
 
